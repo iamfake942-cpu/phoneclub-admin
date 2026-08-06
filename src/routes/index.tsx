@@ -127,7 +127,7 @@ function Dashboard() {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid items-start gap-4 xl:grid-cols-3">
         <Card className="card-soft rounded-2xl border xl:col-span-2">
           <CardHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
             <div className="min-w-0">
