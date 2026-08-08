@@ -1,32 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Boxes,
-  CheckCircle2,
   Download,
   FileDown,
   FileSpreadsheet,
   PackageX,
   RefreshCw,
   TriangleAlert,
-  Upload,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatCard } from "@/components/common/StatCard";
-import { StatusBadge } from "@/components/common/StatusBadge";
 import { UploadArea } from "@/components/stock/UploadArea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { dashboardStats, formatDateTime, stockRows } from "@/data/mock-data";
-import { cn } from "@/lib/utils";
+import { dashboardStats, stockRows } from "@/data/mock-data";
 
 export const Route = createFileRoute("/stock")({
   head: () => ({
@@ -62,9 +50,6 @@ function StockPage() {
             </Button>
             <Button variant="outline" className="rounded-xl">
               <FileSpreadsheet className="h-4 w-4" /> Export Stock
-            </Button>
-            <Button className="rounded-xl">
-              <Upload className="h-4 w-4" /> Upload Stock
             </Button>
           </>
         }
@@ -108,70 +93,12 @@ function StockPage() {
         <CardHeader>
           <CardTitle className="text-base font-bold">Upload Excel</CardTitle>
           <CardDescription>
-            Bulk-update stock levels by importing your warehouse spreadsheet.
+            Import the SAP stock export to update product quantities and availability immediately.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <UploadArea />
         </CardContent>
-      </Card>
-
-      <Card className="card-soft overflow-hidden rounded-2xl border p-0">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b p-4">
-          <div className="min-w-0">
-            <p className="text-base font-bold">Stock Preview</p>
-            <p className="text-xs text-muted-foreground">
-              Rows parsed from the last import — review before applying.
-            </p>
-          </div>
-          <Button size="sm" className="shrink-0 rounded-lg">
-            <CheckCircle2 className="h-4 w-4" /> Apply changes
-          </Button>
-        </div>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Brand</TableHead>
-                <TableHead>Model</TableHead>
-                <TableHead className="text-center">Current stock</TableHead>
-                <TableHead className="text-center">New stock</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Updated at</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stockRows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className={cn(
-                    "transition-colors hover:bg-accent/50",
-                    row.availability === "Out of Stock" && "bg-destructive/5",
-                    row.availability === "Low Stock" && "bg-warning/5",
-                  )}
-                >
-                  <TableCell className="font-semibold">{row.brand}</TableCell>
-                  <TableCell className="max-w-[200px] truncate">{row.model}</TableCell>
-                  <TableCell className="text-center tabular-nums">{row.currentStock}</TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-center font-semibold tabular-nums",
-                      row.newStock > row.currentStock ? "text-success" : "text-destructive",
-                    )}
-                  >
-                    {row.newStock}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={row.availability} />
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatDateTime(row.updatedAt)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
       </Card>
     </div>
   );

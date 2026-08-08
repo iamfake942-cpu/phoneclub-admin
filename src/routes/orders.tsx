@@ -1,6 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Download, Eye, MoreHorizontal, Pencil, Printer, ShoppingCart, XCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Download,
+  Eye,
+  MoreHorizontal,
+  Pencil,
+  Printer,
+  ShoppingCart,
+  XCircle,
+} from "lucide-react";
+import { useState } from "react";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -30,7 +39,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { currency, formatDate, orders } from "@/data/mock-data";
+import { currency, formatDate } from "@/data/mock-data";
+import { getAdminOrders } from "@/lib/admin-api";
 
 export const Route = createFileRoute("/orders")({
   head: () => ({
@@ -47,7 +57,15 @@ export const Route = createFileRoute("/orders")({
   component: OrdersPage,
 });
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 20;
+
+function displayStatus(status: string) {
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((word) => word[0]?.toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
 function OrdersPage() {
   const [query, setQuery] = useState("");
@@ -55,31 +73,33 @@ function OrdersPage() {
   const [payment, setPayment] = useState("all");
   const [range, setRange] = useState("30");
   const [page, setPage] = useState(1);
+  const { data, error, isLoading } = useQuery({
+    queryKey: ["admin-orders", page],
+    queryFn: () => getAdminOrders(page, PAGE_SIZE),
+    enabled: typeof window !== "undefined",
+  });
+  const orders = data?.orders ?? [];
 
-  const filtered = useMemo(
-    () =>
-      orders.filter((order) => {
-        const q = query.trim().toLowerCase();
-        const matchesQuery =
-          !q ||
-          [order.orderNumber, order.customer, order.email, order.product].some((field) =>
-            field.toLowerCase().includes(q),
-          );
-        const matchesStatus = status === "all" || order.status === status;
-        const matchesPayment = payment === "all" || order.paymentStatus === payment;
-        return matchesQuery && matchesStatus && matchesPayment;
-      }),
-    [query, status, payment],
-  );
-
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
-  const current = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const filtered = orders.filter((order) => {
+    const q = query.trim().toLowerCase();
+    const matchesQuery =
+      !q ||
+      [
+        order.merchant_order_reference,
+        order.customer_name,
+        order.customer_email,
+        ...order.items.map((item) => item.product_name),
+      ].some((field) => field.toLowerCase().includes(q));
+    const matchesStatus = status === "all" || order.order_status === status;
+    const matchesPayment = payment === "all" || order.payment_status === payment;
+    return matchesQuery && matchesStatus && matchesPayment;
+  });
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Orders"
-        description={`${orders.length} orders placed in the selected period`}
+        description={`${data?.pagination.total ?? 0} total orders`}
         actions={
           <Button variant="outline" className="rounded-xl">
             <Download className="h-4 w-4" /> Export CSV
@@ -109,11 +129,13 @@ function OrdersPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {["Pending", "Confirmed", "Packed", "Shipped", "Delivered", "Cancelled"].map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
+              {["PENDING_PAYMENT", "CONFIRMED", "PACKED", "SHIPPED", "DELIVERED", "CANCELLED"].map(
+                (s) => (
+                  <SelectItem key={s} value={s}>
+                    {displayStatus(s)}
+                  </SelectItem>
+                ),
+              )}
             </SelectContent>
           </Select>
           <Select
@@ -128,9 +150,9 @@ function OrdersPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All payments</SelectItem>
-              {["Paid", "Unpaid", "Refunded", "Failed"].map((s) => (
+              {["PENDING", "PAID", "REFUNDED", "FAILED"].map((s) => (
                 <SelectItem key={s} value={s}>
-                  {s}
+                  {displayStatus(s)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -147,7 +169,11 @@ function OrdersPage() {
           </Select>
         </div>
 
-        {current.length === 0 ? (
+        {isLoading ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">Loading orders…</div>
+        ) : error ? (
+          <div className="p-8 text-center text-sm text-destructive">{error.message}</div>
+        ) : filtered.length === 0 ? (
           <EmptyState
             icon={ShoppingCart}
             title="No orders found"
@@ -161,7 +187,6 @@ function OrdersPage() {
                   <TableHead>Order #</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
                   <TableHead>Product</TableHead>
                   <TableHead className="text-center">Qty</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
@@ -173,30 +198,31 @@ function OrdersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {current.map((order) => (
+                {filtered.map((order) => (
                   <TableRow key={order.id} className="transition-colors hover:bg-accent/50">
-                    <TableCell className="font-semibold">{order.orderNumber}</TableCell>
-                    <TableCell className="whitespace-nowrap">{order.customer}</TableCell>
+                    <TableCell className="font-semibold">
+                      {order.merchant_order_reference}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">{order.customer_name}</TableCell>
                     <TableCell className="max-w-[180px] truncate text-muted-foreground">
-                      {order.email}
+                      {order.customer_email}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {order.phone}
+                    <TableCell className="max-w-[180px] truncate">
+                      {order.items.map((item) => item.product_name).join(", ") || "—"}
                     </TableCell>
-                    <TableCell className="max-w-[180px] truncate">{order.product}</TableCell>
-                    <TableCell className="text-center tabular-nums">{order.quantity}</TableCell>
+                    <TableCell className="text-center tabular-nums">{order.item_count}</TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">
-                      {currency(order.amount)}
+                      {currency(Number(order.final_amount))}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">{order.paymentMethod}</TableCell>
+                    <TableCell className="whitespace-nowrap">{order.payment_method}</TableCell>
                     <TableCell>
-                      <StatusBadge status={order.paymentStatus} />
+                      <StatusBadge status={displayStatus(order.payment_status)} />
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={order.status} />
+                      <StatusBadge status={displayStatus(order.order_status)} />
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatDate(order.createdAt)}
+                      {formatDate(order.created_at)}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -228,12 +254,14 @@ function OrdersPage() {
           </div>
         )}
 
-        <TablePagination
-          page={page}
-          pageCount={pageCount}
-          total={filtered.length}
-          onPageChange={setPage}
-        />
+        {data && (
+          <TablePagination
+            page={data.pagination.page}
+            pageCount={data.pagination.total_pages}
+            total={data.pagination.total}
+            onPageChange={setPage}
+          />
+        )}
       </Card>
     </div>
   );

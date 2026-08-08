@@ -4,10 +4,12 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
+  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -15,6 +17,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { Toaster } from "@/components/ui/sonner";
+import { hasAccessToken } from "@/lib/admin-api";
 
 function NotFoundComponent() {
   return (
@@ -126,21 +129,42 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const navigate = useNavigate();
+  const [isClient, setIsClient] = useState(false);
+  const isLoginRoute = pathname === "/login";
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (isClient && !isLoginRoute && !hasAccessToken()) {
+      navigate({ to: "/login", replace: true });
+    }
+  }, [isClient, isLoginRoute, navigate]);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SidebarProvider>
-        <div className="flex min-h-screen w-full bg-background">
-          <AppSidebar />
-          <SidebarInset className="min-w-0 bg-transparent">
-            <Topbar />
-            <main className="min-w-0 flex-1 p-4 sm:p-6">
-              {/* Required: nested routes render here. */}
-              <Outlet />
-            </main>
-          </SidebarInset>
+      {isLoginRoute ? (
+        <Outlet />
+      ) : !isClient || !hasAccessToken() ? (
+        <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
+          Checking your session…
         </div>
-      </SidebarProvider>
+      ) : (
+        <SidebarProvider>
+          <div className="flex min-h-screen w-full bg-background">
+            <AppSidebar />
+            <SidebarInset className="min-w-0 bg-transparent">
+              <Topbar />
+              <main className="min-w-0 flex-1 p-4 sm:p-6">
+                <Outlet />
+              </main>
+            </SidebarInset>
+          </div>
+        </SidebarProvider>
+      )}
       <Toaster />
     </QueryClientProvider>
   );

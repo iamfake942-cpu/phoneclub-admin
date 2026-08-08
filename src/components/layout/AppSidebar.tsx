@@ -27,14 +27,14 @@ import { Badge } from "@/components/ui/badge";
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Orders", url: "/orders", icon: ShoppingCart, badge: "12" },
+  { title: "Orders", url: "/orders", icon: ShoppingCart },
   { title: "Products", url: "/products", icon: Smartphone },
   { title: "Stock Management", url: "/stock", icon: Boxes },
   { title: "Customers", url: "/customers", icon: Users },
 ] as const;
 
 const secondaryItems = [
-  { title: "Notifications", url: "/notifications", icon: Bell, badge: "4" },
+  { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Reports", url: "/reports", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },
 ] as const;
@@ -46,7 +46,9 @@ export function AppSidebar() {
 
   const isActive = (url: string) => (url === "/" ? pathname === "/" : pathname.startsWith(url));
 
-  const renderItems = (items: readonly { title: string; url: string; icon: typeof Bell; badge?: string }[]) => (
+  const renderItems = (
+    items: readonly { title: string; url: string; icon: typeof Bell; badge?: string }[],
+  ) => (
     <SidebarMenu>
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
@@ -103,9 +105,7 @@ export function AppSidebar() {
         <SidebarFooter className="p-3">
           <div className="card-soft rounded-xl border p-3">
             <p className="text-xs font-semibold">Store health</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              6 SKUs need restocking this week.
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">6 SKUs need restocking this week.</p>
             <Link
               to="/stock"
               className="mt-2 inline-block text-xs font-semibold text-primary hover:underline"

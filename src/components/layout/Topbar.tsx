@@ -1,6 +1,7 @@
-import { Link } from "@tanstack/react-router";
-import { Bell, Moon, Search, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Bell, LogOut, Moon, Search, Sun } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -14,15 +15,87 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { notifications, relativeTime } from "@/data/mock-data";
+import { relativeTime } from "@/data/mock-data";
+import {
+  clearAccessToken,
+  getAdminOrders,
+  getAdminProfile,
+  type AdminOrder,
+} from "@/lib/admin-api";
+
+type OrderNotification = {
+  id: number;
+  title: string;
+  description: string;
+  timestamp: string;
+  unread: boolean;
+};
+
+function createOrderNotification(order: AdminOrder): OrderNotification {
+  return {
+    id: order.id,
+    title: "New order received",
+    description: `${order.customer_name} placed ${order.merchant_order_reference}.`,
+    timestamp: order.created_at,
+    unread: true,
+  };
+}
+
+function initials(name: string) {
+  return name
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function displayRole(role?: string) {
+  return role
+    ? role.replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : "Administrator";
+}
 
 export function Topbar() {
   const [dark, setDark] = useState(true);
-  const unread = notifications.filter((n) => n.unread).length;
+  const [orderNotifications, setOrderNotifications] = useState<OrderNotification[]>([]);
+  const knownOrderIds = useRef(new Set<number>());
+  const hasLoadedOrders = useRef(false);
+  const navigate = useNavigate();
+  const { data: ordersData } = useQuery({
+    queryKey: ["admin-orders", "notifications"],
+    queryFn: () => getAdminOrders(1, 20),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
+  const latestOrders = ordersData?.orders;
+  const unread = orderNotifications.filter((notification) => notification.unread).length;
+  const admin = getAdminProfile();
+  const adminName = admin?.name || admin?.email || "Administrator";
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+
+  useEffect(() => {
+    if (!latestOrders) return;
+
+    if (!hasLoadedOrders.current) {
+      latestOrders.forEach((order) => knownOrderIds.current.add(order.id));
+      hasLoadedOrders.current = true;
+      return;
+    }
+
+    const newOrders = latestOrders.filter((order) => !knownOrderIds.current.has(order.id));
+    newOrders.forEach((order) => knownOrderIds.current.add(order.id));
+
+    if (newOrders.length > 0) {
+      setOrderNotifications((current) =>
+        [...newOrders.map(createOrderNotification), ...current].slice(0, 10),
+      );
+    }
+  }, [latestOrders]);
 
   return (
     <header className="sticky top-0 z-30 border-b bg-card/80 backdrop-blur-xl">
@@ -55,6 +128,11 @@ export function Topbar() {
                 size="icon"
                 className="relative rounded-xl"
                 aria-label="Notifications"
+                onClick={() =>
+                  setOrderNotifications((current) =>
+                    current.map((notification) => ({ ...notification, unread: false })),
+                  )
+                }
               >
                 <Bell className="h-4 w-4" />
                 {unread > 0 && (
@@ -65,20 +143,29 @@ export function Topbar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+              <DropdownMenuLabel>New orders</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {notifications.slice(0, 4).map((n) => (
-                <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5 py-2">
-                  <span className="text-xs font-semibold">{n.title}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {relativeTime(n.timestamp)}
-                  </span>
-                </DropdownMenuItem>
-              ))}
+              {orderNotifications.length === 0 ? (
+                <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+                  No new orders yet.
+                </p>
+              ) : (
+                orderNotifications.slice(0, 4).map((notification) => (
+                  <DropdownMenuItem
+                    key={notification.id}
+                    className="flex-col items-start gap-0.5 py-2"
+                  >
+                    <span className="text-xs font-semibold">{notification.title}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {notification.description} · {relativeTime(notification.timestamp)}
+                    </span>
+                  </DropdownMenuItem>
+                ))
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link to="/notifications" className="text-xs font-semibold text-primary">
-                  View all notifications
+                <Link to="/orders" className="text-xs font-semibold text-primary">
+                  View orders
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -89,12 +176,14 @@ export function Topbar() {
               <button className="ml-1 flex items-center gap-2 rounded-xl p-1 transition-colors hover:bg-accent">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="gradient-primary text-xs font-bold text-primary-foreground">
-                    RK
+                    {initials(adminName)}
                   </AvatarFallback>
                 </Avatar>
                 <span className="hidden text-left leading-tight lg:block">
-                  <span className="block text-xs font-semibold">Ravi Kumar</span>
-                  <span className="block text-[11px] text-muted-foreground">Super Admin</span>
+                  <span className="block max-w-40 truncate text-xs font-semibold">{adminName}</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {displayRole(admin?.role)}
+                  </span>
                 </span>
               </button>
             </DropdownMenuTrigger>
@@ -108,7 +197,14 @@ export function Topbar() {
                 <Link to="/settings">Preferences</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Sign out</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  clearAccessToken();
+                  navigate({ to: "/login", replace: true });
+                }}
+              >
+                <LogOut className="h-4 w-4" /> Log out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

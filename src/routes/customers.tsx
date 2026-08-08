@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { UserRound, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { TablePagination } from "@/components/common/TablePagination";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,7 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { currency, customers, formatDate } from "@/data/mock-data";
+import { currency, formatDate } from "@/data/mock-data";
+import { getAdminUsers } from "@/lib/admin-api";
 
 export const Route = createFileRoute("/customers")({
   head: () => ({
@@ -36,33 +39,47 @@ export const Route = createFileRoute("/customers")({
 
 function CustomersPage() {
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const { data, error, isLoading } = useQuery({
+    queryKey: ["admin-users", page],
+    queryFn: () => getAdminUsers(page, 20),
+    enabled: typeof window !== "undefined",
+  });
+  const users = data?.users ?? [];
 
-  const filtered = useMemo(() => {
+  const filtered = (() => {
     const q = query.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter((c) =>
-      [c.name, c.email, c.phone].some((f) => f.toLowerCase().includes(q)),
+    if (!q) return users;
+    return users.filter((user) =>
+      [user.name, user.email].some((field) => field.toLowerCase().includes(q)),
     );
-  }, [query]);
+  })();
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Customers"
-        description={`${customers.length} registered customers`}
+        description={`${data?.pagination.total ?? 0} registered customers`}
       />
 
       <Card className="card-soft overflow-hidden rounded-2xl border p-0">
         <div className="border-b p-4">
           <SearchInput
             value={query}
-            onChange={setQuery}
-            placeholder="Search name, email or phone…"
+            onChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
+            placeholder="Search name or email…"
             className="md:max-w-sm"
           />
         </div>
 
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">Loading customers…</div>
+        ) : error ? (
+          <div className="p-8 text-center text-sm text-destructive">{error.message}</div>
+        ) : filtered.length === 0 ? (
           <EmptyState
             icon={Users}
             title="No customers found"
@@ -75,7 +92,6 @@ function CustomersPage() {
                 <TableRow>
                   <TableHead>Customer</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
                   <TableHead className="text-center">Orders</TableHead>
                   <TableHead className="text-right">Total spent</TableHead>
                   <TableHead>Joined</TableHead>
@@ -102,18 +118,17 @@ function CustomersPage() {
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {customer.email}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {customer.phone}
+                    <TableCell className="text-center tabular-nums">
+                      {customer.order_count}
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">{customer.orders}</TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">
-                      {currency(customer.totalSpent)}
+                      {currency(Number(customer.total_order_Amount))}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatDate(customer.joinedAt)}
+                      {formatDate(customer.created_at)}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={customer.status} />
+                      <StatusBadge status={customer.is_active ? "Active" : "Inactive"} />
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="outline" size="sm" className="rounded-lg">
@@ -125,6 +140,14 @@ function CustomersPage() {
               </TableBody>
             </Table>
           </div>
+        )}
+        {data && (
+          <TablePagination
+            page={data.pagination.page}
+            pageCount={data.pagination.total_pages}
+            total={data.pagination.total}
+            onPageChange={setPage}
+          />
         )}
       </Card>
     </div>
