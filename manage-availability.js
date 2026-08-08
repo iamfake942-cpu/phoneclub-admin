@@ -12,6 +12,7 @@ const JSON_SUMMARY = process.argv.includes("--json-summary");
 
 const dbConfig = {
   host: process.env.DB_HOST || "127.0.0.1",
+  port: process.env.DB_PORT || 20195,
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "Iamdb@26",
   database: process.env.DB_NAME || "phone_club",
