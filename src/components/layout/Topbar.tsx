@@ -17,7 +17,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { notifications, relativeTime } from "@/data/mock-data";
 
 export function Topbar() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   const unread = notifications.filter((n) => n.unread).length;
 
   useEffect(() => {
